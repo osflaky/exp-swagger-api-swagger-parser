@@ -1,0 +1,338 @@
+package io.swagger.v3.parser.test;
+
+
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.PathItem;
+import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.media.StringSchema;
+import io.swagger.v3.oas.models.parameters.Parameter;
+import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.parser.OpenAPIV3Parser;
+import io.swagger.v3.parser.core.models.AuthorizationValue;
+import io.swagger.v3.parser.core.models.ParseOptions;
+import io.swagger.v3.parser.core.models.SwaggerParseResult;
+import io.swagger.v3.parser.urlresolver.PermittedUrlsChecker;
+import io.swagger.v3.parser.util.RemoteUrl;
+import mockit.Expectations;
+import mockit.Mocked;
+import org.junit.Assert;
+import org.testng.annotations.Test;
+
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertTrue;
+
+public class NetworkReferenceTest {
+    @Mocked
+    public RemoteUrl remoteUrl;
+
+    private static String issue_323_yaml, issue_323_events_yaml, issue_323_paging_yaml, issue_323_bar_yaml;
+    private static String issue_328_yaml, issue_328_events_yaml, issue_328_paging_yaml, issue_328_bar_yaml;
+    private static String issue_330_yaml, issue_330_users_yaml, issue_330_paging_yaml, issue_330_entities_yaml;
+    private static String issue_335_json, issue_335_bar_json;
+    private static String issue_407_json;
+    private static String issue_411_server, issue_411_components;
+    private static String issue_742_json;
+    private static String issue_443_yaml, issue_443_ref_yaml;
+
+    static {
+        try {
+            issue_323_yaml = readFile("src/test/resources/nested-file-references/issue-323.yaml");
+            issue_323_events_yaml = readFile("src/test/resources/nested-file-references/eventsCase9.yaml");
+            issue_323_paging_yaml = readFile("src/test/resources/nested-file-references/common/pagingWithFolderRef.yaml");
+            issue_323_bar_yaml = readFile("src/test/resources/nested-file-references/common/common2/bar.yaml");
+
+            issue_328_yaml = readFile("src/test/resources/nested-file-references/issue-328.yaml");
+            issue_328_events_yaml = readFile("src/test/resources/nested-file-references/issue-328-events.yaml");
+            issue_328_paging_yaml = readFile("src/test/resources/nested-file-references/common/issue-328-paging.yaml");
+            issue_328_bar_yaml = readFile("src/test/resources/nested-file-references/common/common2/issue-328-bar.yaml");
+
+            issue_330_yaml = readFile("src/test/resources/nested-network-references/issue-330.yaml");
+            issue_330_paging_yaml = readFile("src/test/resources/nested-network-references/common/issue-330-paging.yaml");
+            issue_330_users_yaml = readFile("src/test/resources/nested-network-references/common/issue-330-users.yaml");
+            issue_330_entities_yaml = readFile("src/test/resources/nested-network-references/common/issue-330-entities.yaml");
+
+            issue_335_json = readFile("src/test/resources/nested-file-references/issue-335.json");
+            issue_335_bar_json = readFile("src/test/resources/nested-file-references/issue-335-bar.json");
+
+            issue_407_json = readFile("src/test/resources/petstore.yaml");
+
+            issue_411_server = readFile("src/test/resources/nested-network-references/issue-411-server.yaml");
+            issue_411_components = readFile("src/test/resources/nested-network-references/issue-411-remote2.yaml");
+
+            issue_742_json = readFile("src/test/resources/issue-742.json");
+            issue_443_yaml = readFile("src/test/resources/swos-443/root.yaml");
+            issue_443_ref_yaml = readFile("src/test/resources/swos-443/ref.yaml");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Test(description = "option true, adds Original Location to messages when ref is remote")
+    public void testValidateExternalRefsTrueRemote() throws Exception {
+        ParseOptions options = new ParseOptions();
+        options.setValidateExternalRefs(true);
+        options.setResolve(true);
+
+        new Expectations() {
+            {
+                RemoteUrl.urlToString("http://localhost:8080/swos-443/root.yaml", new ArrayList<>());
+                result = issue_443_yaml;
+                RemoteUrl.urlToString("http://localhost:8080/swos-443/ref.yaml", new ArrayList<>(), (PermittedUrlsChecker) any);
+                result = issue_443_ref_yaml;
+            }
+        };
+        SwaggerParseResult result = new OpenAPIV3Parser().readLocation("http://localhost:8080/swos-443/root.yaml", null, options);
+        OpenAPI openAPI = result.getOpenAPI();
+
+        assertNotNull(result.getMessages());
+        assertEquals(result.getMessages().size(), 20);
+        assertNotNull(openAPI);
+        assertTrue(result.getMessages().contains("attribute components.requestBodies.NewItem.asdasd is unexpected (./ref.yaml)"));
+        assertTrue(result.getMessages().contains("attribute components.requestBodies.NewItem.descasdasdription is unexpected (./ref.yaml)"));
+        assertTrue(result.getMessages().contains("attribute components.responses.GeneralError.descrsaiption is unexpected (./ref.yaml)"));
+        assertTrue(result.getMessages().contains("attribute components.responses.GeneralError.asdas is unexpected (./ref.yaml)"));
+        assertTrue(result.getMessages().contains("attribute components.responses.GeneralError.description is missing (./ref.yaml)"));
+        assertTrue(result.getMessages().contains("attribute components.schemas.Examples.nonExpected is unexpected (./ref.yaml)"));
+        assertTrue(result.getMessages().contains("attribute components.parameters.skipParam.[skip].in is not of type `[query|header|path|cookie]` (./ref.yaml)"));
+        assertTrue(result.getMessages().contains("attribute components.securitySchemes.api_key.namex is unexpected (./ref.yaml)"));
+        assertTrue(result.getMessages().contains("attribute components.securitySchemes.api_key.name is missing (./ref.yaml)"));
+        assertTrue(result.getMessages().contains("attribute components.securitySchemes.api_key.in is not of type `cookie|header|query` (./ref.yaml)"));
+        assertTrue(result.getMessages().contains("attribute components.callbacks.webhookVerificationEvent.postx is unexpected (./ref.yaml)"));
+        assertTrue(result.getMessages().contains("attribute components.headers.X-Rate-Limit-Limit.descriptasdd is unexpected (./ref.yaml)"));
+        assertTrue(result.getMessages().contains("attribute components.links.unsubscribe.parametersx is unexpected (./ref.yaml)"));
+        assertTrue(result.getMessages().contains("attribute components.examples.response-example.summaryx is unexpected (./ref.yaml)"));
+        assertTrue(result.getMessages().contains("components.examples.response-example. value and externalValue are both present (./ref.yaml)"));
+        assertTrue(result.getMessages().contains("attribute components.callbacks.failed.wrongField is not of type `object` (./ref.yaml)"));
+        assertTrue(result.getMessages().contains("attribute paths.~1refPet(get).responses is missing (./ref.yaml)"));
+
+        //error message in main file
+        assertTrue(result.getMessages().contains("attribute components.schemas.InvalidSchema.invalid is unexpected"));
+    }
+
+    @Test
+    public void testIssue323() throws Exception {
+        new Expectations() {{
+            RemoteUrl.urlToString("http://localhost:8080/nested-file-references/issue-323.yaml", new ArrayList<>());
+            result = issue_323_yaml;
+
+            RemoteUrl.urlToString("http://localhost:8080/nested-file-references/eventsCase9.yaml", new ArrayList<>(), (PermittedUrlsChecker) any);
+            result = issue_323_events_yaml;
+
+            RemoteUrl.urlToString("http://localhost:8080/nested-file-references/common/pagingWithFolderRef.yaml", new ArrayList<>(), (PermittedUrlsChecker) any);
+            result = issue_323_paging_yaml;
+
+            RemoteUrl.urlToString("http://localhost:8080/nested-file-references/common/common2/bar.yaml", new ArrayList<>(), (PermittedUrlsChecker) any);
+            result = issue_323_bar_yaml;
+        }};
+
+        ParseOptions options = new ParseOptions();
+        options.setResolve(true);
+
+        SwaggerParseResult result = new OpenAPIV3Parser().readLocation("http://localhost:8080/nested-file-references/issue-323.yaml", new ArrayList<>(), options);
+        assertNotNull(result.getOpenAPI());
+
+        OpenAPI swagger = result.getOpenAPI();
+        assertNotNull(swagger.getPaths().get("/events"));
+
+        assertNotNull(swagger.getComponents().getSchemas().get("StatusResponse"));
+        assertNotNull(swagger.getComponents().getSchemas().get("Paging"));
+        assertNotNull(swagger.getComponents().getSchemas().get("Foobar"));
+    }
+
+    @Test
+    public void testIssue328() throws Exception {
+        new Expectations() {{
+            RemoteUrl.urlToString("http://localhost:8080/resources/swagger/issue-328.yaml", new ArrayList<>());
+            result = issue_328_yaml;
+
+            RemoteUrl.urlToString("http://localhost:8080/resources/swagger/issue-328-events.yaml", new ArrayList<>(), (PermittedUrlsChecker) any);
+            result = issue_328_events_yaml;
+
+            RemoteUrl.urlToString("http://localhost:8080/resources/swagger/common/issue-328-paging.yaml", new ArrayList<>(), (PermittedUrlsChecker) any);
+            result = issue_328_paging_yaml;
+
+            RemoteUrl.urlToString("http://localhost:8080/resources/swagger/common/common2/issue-328-bar.yaml", new ArrayList<>(), (PermittedUrlsChecker) any);
+            result = issue_328_bar_yaml;
+        }};
+
+        ParseOptions options = new ParseOptions();
+        options.setResolve(true);
+        SwaggerParseResult result = new OpenAPIV3Parser().readLocation("http://localhost:8080/resources/swagger/issue-328.yaml", new ArrayList<>(), options);
+        assertNotNull(result.getOpenAPI());
+
+        OpenAPI swagger = result.getOpenAPI();
+        assertNotNull(swagger.getPaths().get("/events"));
+
+        assertNotNull(swagger.getComponents().getSchemas().get("StatusResponse"));
+        assertNotNull(swagger.getComponents().getSchemas().get("Paging"));
+        assertNotNull(swagger.getComponents().getSchemas().get("Foobar"));
+    }
+
+    @Test
+    public void testIssue330() throws Exception {
+        new Expectations() {{
+            RemoteUrl.urlToString("http://server1/resources/swagger.yaml", new ArrayList<>());
+            result = issue_330_yaml;
+
+            RemoteUrl.urlToString("http://server1/resources/common/paging.yaml", new ArrayList<>(), (PermittedUrlsChecker) any);
+            result = issue_330_paging_yaml;
+
+            RemoteUrl.urlToString("http://server1/resources/common/users.yaml", new ArrayList<>(), (PermittedUrlsChecker) any);
+            result = issue_330_users_yaml;
+
+            RemoteUrl.urlToString("http://server2/resources/common/entities.yaml", new ArrayList<>(), (PermittedUrlsChecker) any);
+            result = issue_330_entities_yaml;
+        }};
+        ParseOptions options = new ParseOptions();
+        options.setResolve(true);
+
+        SwaggerParseResult result = new OpenAPIV3Parser().readLocation("http://server1/resources/swagger.yaml", new ArrayList<>(), options);
+
+        assertNotNull(result.getOpenAPI());
+        OpenAPI swagger = result.getOpenAPI();
+        assertNotNull(swagger.getPaths().get("/events"));
+
+        assertNotNull(swagger.getComponents().getSchemas().get("Address"));
+        assertNotNull(swagger.getComponents().getSchemas().get("Paging"));
+        assertNotNull(swagger.getComponents().getSchemas().get("users"));
+        assertNotNull(swagger.getComponents().getSchemas().get("Phone"));
+    }
+
+    @Test
+    public void testIssue335() throws Exception {
+        new Expectations() {{
+            RemoteUrl.urlToString("http://server1/resources/swagger.json", new ArrayList<>());
+            result = issue_335_json;
+
+            RemoteUrl.urlToString("http://server1/resources/Bar.json", new ArrayList<>(), (PermittedUrlsChecker) any);
+            result = issue_335_bar_json;
+        }};
+
+
+        ParseOptions options = new ParseOptions();
+        options.setResolve(true);
+        SwaggerParseResult result = new OpenAPIV3Parser().readLocation("http://server1/resources/swagger.json", new ArrayList<>(), options);
+
+        OpenAPI swagger = result.getOpenAPI();
+        assertNotNull(swagger);
+
+        assertNotNull(swagger.getComponents().getSchemas());
+        assertNotNull(swagger.getComponents().getSchemas().get("BarData"));
+        assertNotNull(swagger.getComponents().getSchemas().get("BarSettingsRequest"));
+    }
+
+    @Test
+    public void testPathReference() throws Exception {
+        new Expectations() {{
+            RemoteUrl.urlToString("http://petstore.swagger.io/v2/swagger.json", new ArrayList<>(), (PermittedUrlsChecker) any);
+            result = issue_407_json;
+
+        }};
+
+        OpenAPIV3Parser parser = new OpenAPIV3Parser();
+        String yaml = "openapi: 3.0.0\n" +
+                "info:\n" +
+                "  description: ''\n" +
+                "  version: 1.0.0\n" +
+                "  title: testing\n" +
+                "paths:\n" +
+                "  /foo:\n" +
+                "    $ref: 'http://petstore.swagger.io/v2/swagger.json#/paths/~1pet'\n" +
+                "  /bar:\n" +
+                "    $ref: 'http://petstore.swagger.io/v2/swagger.json#/paths/~1pet'\n";
+
+
+        final SwaggerParseResult result = parser.readContents(yaml);
+        Assert.assertNotNull(result.getOpenAPI());
+        assertEquals(result.getMessages().size(), 0);
+        assertEquals(result.getOpenAPI().getComponents().getSchemas().size(), 3);
+    }
+
+    @Test
+    public void testIssue411() throws Exception {
+        final List<AuthorizationValue> auths = new ArrayList<>();
+        AuthorizationValue auth = new AuthorizationValue("Authorization", "OMG_SO_SEKR3T", "header");
+        auths.add(auth);
+
+        new Expectations() {{
+            RemoteUrl.urlToString("http://remote1/resources/swagger.yaml", auths);
+            result = issue_411_server;
+
+            RemoteUrl.urlToString("http://remote2/resources/foo", auths, (PermittedUrlsChecker) any);
+            result = issue_411_components;
+        }};
+
+        OpenAPIV3Parser parser = new OpenAPIV3Parser();
+        ParseOptions options = new ParseOptions();
+        options.setResolve(true);
+        options.setResolveResponses(true);
+        SwaggerParseResult result = parser.readLocation("http://remote1/resources/swagger.yaml", auths, options);
+
+        OpenAPI swagger = result.getOpenAPI();
+        assertNotNull(swagger.getPaths().get("/health"));
+        PathItem health = swagger.getPaths().get("/health");
+        assertEquals(health.getGet().getParameters().size(), 0);
+        Schema responseRef = health.getGet().getResponses().get("200").getContent().get("*/*").getSchema();
+        assertNotNull(responseRef.get$ref());
+
+
+        assertEquals(responseRef.get$ref(), "#/components/schemas/Success");
+
+        assertNotNull(swagger.getComponents().getSchemas().get("Success"));
+
+        Parameter param = swagger.getPaths().get("/stuff").getGet().getParameters().get(0);
+        assertEquals(param.getIn(), "query");
+        assertEquals(param.getName(), "skip");
+
+        ApiResponse response = swagger.getPaths().get("/stuff").getGet().getResponses().get("200");
+        assertNotNull(response);
+        assertTrue(response.getContent().get("*/*").getSchema() instanceof StringSchema);
+
+        ApiResponse error = swagger.getPaths().get("/stuff").getGet().getResponses().get("400");
+        assertNotNull(error);
+        Schema errorProp = error.getContent().get("*/*").getSchema();
+        assertNotNull(errorProp);
+        assertNotNull(errorProp.get$ref());
+        assertEquals(errorProp.get$ref(), "#/components/schemas/Error");
+
+        assertTrue(swagger.getComponents().getSchemas().get("Error") instanceof Schema);
+    }
+
+    @Test
+    public void testIssue742() throws Exception {
+        final List<AuthorizationValue> auths = new ArrayList<>();
+
+        new Expectations() {{
+            RemoteUrl.urlToString("http://www.example.io/one/two/swagger.json", auths);
+            result = issue_742_json;
+        }};
+
+        OpenAPIV3Parser parser = new OpenAPIV3Parser();
+        ParseOptions options = new ParseOptions();
+        options.setResolve(true);
+        SwaggerParseResult result = parser.readLocation("http://www.example.io/one/two/swagger.json", auths, options);
+
+        Assert.assertNotNull(result.getOpenAPI());
+        Assert.assertNotNull(result.getOpenAPI().getServers());
+        Assert.assertEquals(4, result.getOpenAPI().getServers().size());
+        Assert.assertEquals("An absolute path", result.getOpenAPI().getServers().get(0).getDescription());
+        Assert.assertEquals("https://api.absolute.org/v2", result.getOpenAPI().getServers().get(0).getUrl());
+        Assert.assertEquals("Server relative to root path", result.getOpenAPI().getServers().get(1).getDescription());
+        Assert.assertEquals("http://www.example.io/api/v2", result.getOpenAPI().getServers().get(1).getUrl());
+        Assert.assertEquals("Server relative path 1", result.getOpenAPI().getServers().get(2).getDescription());
+        Assert.assertEquals("http://www.example.io/one/two/path/v2", result.getOpenAPI().getServers().get(2).getUrl());
+        Assert.assertEquals("Server relative path 2", result.getOpenAPI().getServers().get(3).getDescription());
+        Assert.assertEquals("http://www.example.io/one/v2", result.getOpenAPI().getServers().get(3).getUrl());
+    }
+
+    static String readFile(String name) throws Exception {
+        return new String(Files.readAllBytes(new File(name).toPath()), StandardCharsets.UTF_8);
+    }
+}
